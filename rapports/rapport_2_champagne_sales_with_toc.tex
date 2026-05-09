@@ -1,0 +1,634 @@
+
+\documentclass[12pt,a4paper]{report}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage{geometry}
+\usepackage{amsmath, amssymb}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{float}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\geometry{margin=2.4cm}
+\hypersetup{colorlinks=true, linkcolor=blue, urlcolor=blue}
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{TIME SERIES}
+\rhead{Projet ARIMA}
+\cfoot{\thepage}
+\lstset{
+    basicstyle=\ttfamily\small,
+    breaklines=true,
+    frame=single,
+    backgroundcolor=\color{gray!7},
+    keywordstyle=\color{blue},
+    commentstyle=\color{gray},
+    stringstyle=\color{teal}
+}
+\title{\textbf{Rapport 2 -- Monthly Sales of French Champagne}\\[0.4cm]\large Projet de séries temporelles}
+\author{\textbf{Membres du groupe}\\ EL MOUSSAOUI Oussama\\
+SAIDI Mohammed\\
+OURIARHI Mohammed\\
+BENHADDOU HOUCEIN \\[0.5cm]\textbf{Professeur :} ABDELWAHAB NAJI\\\textbf{Module :} TIME SERIES}
+\date{Année universitaire 2025--2026}
+\begin{document}
+\maketitle
+\clearpage
+\renewcommand{\contentsname}{Table des matières}
+\tableofcontents
+\clearpage
+
+\chapter*{Résumé exécutif}
+\addcontentsline{toc}{chapter}{Résumé exécutif}
+Ce rapport présente une étude complète de série temporelle appliquée au jeu de données \textbf{Monthly Sales of French Champagne}. L'objectif est d'analyser la dynamique temporelle, d'étudier la stationnarité, de préparer la série, de construire des modèles de référence, puis de comparer des modèles AR, MA, ARMA, ARIMA et SARIMA. Le travail suit la structure méthodologique exigée dans l'énoncé du projet : analyse exploratoire, transformation, identification, modélisation, évaluation, diagnostic et conclusion.
+
+Le code associé est organisé dans le notebook \texttt{02\_champagne\_sales\_corrected.ipynb}. Le rapport ne se limite pas aux résultats numériques : chaque choix est justifié afin de montrer la logique de raisonnement et non uniquement l'application technique.
+
+\chapter{Présentation du problème et des données}
+\section{Contexte}
+La série \textit{Monthly Sales of French Champagne} représente les ventes mensuelles de champagne en France. Ce type de série est intéressant car il combine une tendance de consommation et une saisonnalité commerciale très marquée, notamment autour des fêtes de fin d'année. L'objectif est donc de prévoir les ventes futures à partir de l'historique mensuel.
+
+La série est constituée de \textbf{105 observations mensuelles}, allant de \textbf{1964-01-01} à \textbf{1972-09-01}. La colonne temporelle est \texttt{Month} et la variable étudiée est \texttt{Sales}. Après conversion en dates, l'index a été forcé en fréquence mensuelle de début de mois avec \texttt{asfreq("MS")}, ce qui permet aux méthodes de séries temporelles de reconnaître explicitement la périodicité mensuelle.
+
+\section{Objectifs de l'étude}
+Les objectifs principaux sont :
+\begin{itemize}
+    \item décrire la série et identifier les caractéristiques visuelles importantes ;
+    \item vérifier la présence de tendance, saisonnalité et variance non constante ;
+    \item tester la stationnarité avec les tests ADF et KPSS ;
+    \item appliquer les transformations nécessaires : logarithme, racine carrée si utile, différenciation ;
+    \item identifier des ordres ARIMA à partir des graphiques ACF et PACF ;
+    \item comparer des modèles simples et avancés avec des métriques interprétables ;
+    \item diagnostiquer les résidus du modèle final.
+\end{itemize}
+
+\chapter{Analyse exploratoire}
+\section{Statistiques descriptives}
+Soit une série temporelle $(Y_t)_{t=1}^n$. La moyenne empirique est :
+\[
+\bar{Y} = \frac{1}{n}\sum_{t=1}^n Y_t
+\]
+La variance empirique est :
+\[
+s^2 = \frac{1}{n-1}\sum_{t=1}^n (Y_t - \bar{Y})^2
+\]
+L'écart-type est :
+\[
+s = \sqrt{s^2}
+\]
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lr}
+\toprule
+Indicateur & Valeur \\
+\midrule
+Nombre d'observations & 105 \\
+Minimum & 1 413.00 \\
+Maximum & 13 916.00 \\
+Moyenne & 4 761.15 \\
+Variance & 6 520 376 \\
+Écart-type & 2 553.50 \\
+\bottomrule
+\end{tabular}
+\caption{Statistiques descriptives de la série.}
+\end{table}
+
+Ces statistiques montrent une dispersion importante. Le maximum est nettement supérieur au minimum, ce qui indique que le niveau de la série varie fortement au cours du temps. L'écart-type représente l'erreur typique autour du niveau moyen dans l'unité du problème.
+
+\section{Visualisation de la série}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{figures_champagne_report/champagne_01_cell8_out0.jpg}
+\caption{Visualisation des ventes mensuelles de champagne.}
+\label{fig:champ-series}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{figures_champagne_report/champagne_02_cell11_out0.jpg}
+\caption{Distribution des ventes mensuelles.}
+\label{fig:champ-hist}
+\end{figure}
+
+La visualisation temporelle montre que la série n'est pas simplement un bruit autour d'une moyenne constante. On observe des variations organisées dans le temps, ce qui justifie l'utilisation d'une approche de séries temporelles.
+
+\section{Moyenne mobile et écart-type mobile}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{figures_champagne_report/champagne_03_cell12_out0.jpg}
+\caption{Moyenne mobile et écart-type mobile sur 12 mois.}
+\label{fig:champ-rolling}
+\end{figure}
+
+La moyenne mobile d'ordre $m$ est définie par :
+\[
+MA_t = \frac{1}{m} \sum_{i=0}^{m-1} Y_{t-i}
+\]
+Dans ce projet, $m=12$ afin de lisser un cycle annuel complet. L'écart-type mobile mesure la variabilité locale sur la même fenêtre.
+
+Pour cette série, la moyenne mobile sur 12 mois passe d'environ \textbf{3 478.17} au début de la période à environ \textbf{5 691.42} à la fin. L'écart-type mobile passe d'environ \textbf{1 555.29} à environ \textbf{2 979.19}. Cette évolution indique que le niveau moyen et la variabilité ne sont pas constants.
+
+\section{Saisonnalité additive ou multiplicative}
+Un modèle additif suppose :
+\[
+Y_t = T_t + S_t + R_t
+\]
+Un modèle multiplicatif suppose :
+\[
+Y_t = T_t \times S_t \times R_t
+\]
+La décision peut être guidée par l'amplitude annuelle $\max(Y)-\min(Y)$ et le ratio annuel $\max(Y)/\min(Y)$.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lrr}
+\toprule
+Année & Amplitude annuelle & Ratio max/min \\
+\midrule
+1964 & 5 100.00 & 3.306 \\
+1965 & 6 598.00 & 4.751 \\
+1966 & 7 681.00 & 5.883 \\
+1967 & 9 008.00 & 6.483 \\
+1969 & 12 095.00 & 7.642 \\
+1970 & 11 338.00 & 7.524 \\
+1971 & 11 011.00 & 7.637 \\
+\bottomrule
+\end{tabular}
+\caption{Amplitude et ratio annuels pour la série Monthly Sales of French Champagne.}
+\end{table}
+
+Dans une saisonnalité additive, l'amplitude saisonnière reste approximativement constante. Dans une saisonnalité multiplicative, l'effet saisonnier est plutôt proportionnel au niveau de la série. Ici, l'amplitude passe d'environ \textbf{5 100.00} à environ \textbf{11 011.00}, tandis que le ratio évolue de \textbf{3.306} vers \textbf{7.637}. Dans cette série, l'amplitude saisonnière augmente fortement avec le niveau moyen. Cela indique que la saisonnalité est plutôt multiplicative : les pics de fin d'année ne correspondent pas à une quantité fixe ajoutée, mais à un effet proportionnel au niveau des ventes. Une transformation logarithmique ou un modèle saisonnier est donc particulièrement pertinent.
+
+\section{Décomposition de la série}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{figures_champagne_report/champagne_04_cell15_out0.jpg}
+\caption{Décomposition additive des ventes de champagne.}
+\label{fig:champ-add}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{figures_champagne_report/champagne_05_cell16_out0.jpg}
+\caption{Décomposition multiplicative des ventes de champagne.}
+\label{fig:champ-mul}
+\end{figure}
+
+La décomposition sépare la série en tendance, saisonnalité et résidu.
+
+Pour la décomposition additive, les composantes saisonnières et résiduelles sont exprimées dans l'unité originale de la série. Dans ce cas, la composante saisonnière varie entre \textbf{-3 222.35} et \textbf{5 906.68}, et les résidus entre \textbf{-2 179.26} et \textbf{2 837.36}. Ces valeurs représentent des quantités ajoutées ou retirées à la tendance.
+
+Pour la décomposition multiplicative, les composantes saisonnières et résiduelles sont des coefficients. La saisonnalité varie entre \textbf{0.365} et \textbf{2.189}, tandis que les résidus varient entre \textbf{0.662} et \textbf{1.759}. Une valeur supérieure à 1 signifie que l'observation est supérieure au niveau attendu, et une valeur inférieure à 1 signifie l'inverse.
+
+\section{Premières hypothèses}
+À partir de l'analyse exploratoire, on formule les hypothèses suivantes :
+\begin{itemize}
+    \item la série présente une tendance, donc la moyenne n'est probablement pas constante ;
+    \item une composante saisonnière peut exister, surtout si certains mois se répètent avec des comportements similaires ;
+    \item la variance semble évoluer avec le temps ;
+    \item une transformation et/ou une différenciation seront probablement nécessaires avant la modélisation ARIMA.
+\end{itemize}
+
+\chapter{Transformation et préparation}
+\section{Feature engineering}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{figures_champagne_report/champagne_06_cell22_out0.jpg}
+\caption{Profil mensuel moyen des ventes, utile pour visualiser la saisonnalité.}
+\label{fig:champ-monthly-profile}
+\end{figure}
+
+Les variables temporelles utiles construites dans le notebook sont : l'année, le mois, le trimestre, les retards de la série et les moyennes mobiles. Par exemple :
+\begin{lstlisting}[language=Python]
+df["year"] = df.index.year
+df["month"] = df.index.month
+df["lag_1"] = df["Sales"].shift(1)
+df["rolling_mean_12"] = df["Sales"].rolling(12).mean()
+\end{lstlisting}
+Ces variables servent à mieux comprendre la dynamique temporelle et à vérifier visuellement les comportements cycliques.
+
+\section{Tests de stationnarité}
+La stationnarité signifie que les propriétés statistiques de la série restent stables dans le temps, notamment la moyenne, la variance et l'autocovariance.
+
+\subsection{Test ADF}
+Le test Augmented Dickey-Fuller vérifie la présence d'une racine unitaire. Les hypothèses sont :
+\[
+H_0 : \text{la série n'est pas stationnaire}, \qquad H_1 : \text{la série est stationnaire}
+\]
+Si la p-value est inférieure à $5\%$, on rejette $H_0$.
+
+\subsection{Test KPSS}
+Le test KPSS utilise les hypothèses inverses :
+\[
+H_0 : \text{la série est stationnaire}, \qquad H_1 : \text{la série n'est pas stationnaire}
+\]
+Si la p-value est inférieure à $5\%$, on rejette la stationnarité.
+
+Le seuil de $5\%$ est le risque accepté de rejeter à tort l'hypothèse nulle.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lrrrr}
+\toprule
+Série testée & Stat ADF & p-value ADF & Stat KPSS & p-value KPSS \\
+\midrule
+Série originale & -1.834 & 0.3639 & 0.513 & 0.0388 \\
+Transformation log & -2.255 & 0.1869 & 0.563 & 0.0275 \\
+Différence d'ordre 1 & -7.190 & 0.0000 & 0.412 & 0.0721 \\
+Log + différence d'ordre 1 & -4.461 & 0.0002 & 0.338 & 0.1000 \\
+\bottomrule
+\end{tabular}
+\caption{Synthèse des tests de stationnarité.}
+\end{table}
+
+La série originale n'est pas stationnaire : le test ADF ne rejette pas l'hypothèse de non-stationnarité, et le test KPSS rejette la stationnarité. Après différenciation d'ordre 1, l'ADF devient significatif et le KPSS ne rejette plus la stationnarité. La transformation logarithmique seule ne suffit généralement pas, mais le log-différencié améliore nettement la stabilité.
+
+\section{Transformations}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{figures_champagne_report/champagne_07_cell27_out0.jpg}
+\caption{Série originale des ventes.}
+\label{fig:champ-original}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{figures_champagne_report/champagne_08_cell27_out1.jpg}
+\caption{Transformation logarithmique.}
+\label{fig:champ-log}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{figures_champagne_report/champagne_10_cell27_out3.jpg}
+\caption{Différenciation d'ordre 1.}
+\label{fig:champ-diff}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{figures_champagne_report/champagne_11_cell27_out4.jpg}
+\caption{Transformation logarithmique suivie d'une différenciation.}
+\label{fig:champ-logdiff}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{figures_champagne_report/champagne_12_cell27_out5.jpg}
+\caption{Différenciation saisonnière d'ordre 12.}
+\label{fig:champ-seas-diff}
+\end{figure}
+
+La transformation logarithmique est :
+\[
+Z_t = \log(Y_t)
+\]
+Elle est utile lorsque la variance augmente avec le niveau. La racine carrée :
+\[
+Z_t = \sqrt{Y_t}
+\]
+est une transformation plus douce, souvent utilisée pour des données positives de type comptage ou volume.
+
+La différenciation d'ordre 1 est définie par :
+\[
+\nabla Y_t = Y_t - Y_{t-1}
+\]
+Avec l'opérateur de retard $L$, tel que $LY_t = Y_{t-1}$, on écrit :
+\[
+\nabla Y_t = (1-L)Y_t
+\]
+La différenciation d'ordre $d$ est :
+\[
+\nabla^d Y_t = (1-L)^d Y_t
+\]
+
+Dans notre cas, les résultats montrent que $d=1$ est une hypothèse raisonnable pour rendre la série stationnaire.
+
+\section{Analyse ACF/PACF}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{figures_champagne_report/champagne_13_cell31_out0.jpg}
+\caption{ACF de la série différenciée.}
+\label{fig:champ-acf}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{figures_champagne_report/champagne_14_cell31_out1.jpg}
+\caption{PACF de la série différenciée.}
+\label{fig:champ-pacf}
+\end{figure}
+
+L'autocorrélation au lag $k$ est :
+\[
+\rho(k) = \frac{\gamma(k)}{\gamma(0)}
+\]
+où
+\[
+\gamma(k) = Cov(Y_t, Y_{t-k})
+\]
+La PACF mesure la corrélation entre $Y_t$ et $Y_{t-k}$ après suppression de l'effet des retards intermédiaires.
+
+Les premières autocorrélations de la série différenciée sont :
+\[
+ACF_{1:6} = -0.089, -0.230, -0.101, -0.296, 0.128, 0.172
+\]
+Les premières autocorrélations partielles sont :
+\[
+PACF_{1:6} = -0.089, -0.239, -0.158, -0.422, -0.082, -0.058
+\]
+Ces valeurs suggèrent de tester des modèles avec des ordres faibles, par exemple $p \in \{0,1,2\}$ et $q \in \{0,1,2\}$, puis de comparer avec AIC, BIC et les erreurs de prévision.
+
+\section{Découpage train/test}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{figures_champagne_report/champagne_15_cell34_out1.jpg}
+\caption{Découpage chronologique en train et test.}
+\label{fig:champ-train-test}
+\end{figure}
+
+Le découpage respecte l'ordre chronologique :
+\begin{itemize}
+    \item train : 84 observations, de 1964-01-01 à 1970-12-01 ;
+    \item test : 21 observations, de 1971-01-01 à 1972-09-01.
+\end{itemize}
+Il ne faut pas mélanger aléatoirement les données, car cela créerait du \textit{data leakage} : le modèle pourrait apprendre indirectement des informations du futur.
+
+\chapter{Modélisation}
+\section{Modèles de référence}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{figures_champagne_report/champagne_16_cell39_out0.jpg}
+\caption{Comparaison des baselines sur la période test.}
+\label{fig:champ-baselines}
+\end{figure}
+
+\subsection{Modèle naïf}
+Le modèle naïf prédit que la prochaine valeur sera égale à la dernière valeur observée :
+\[
+\hat{Y}_{t+1} = Y_t
+\]
+Il est simple mais essentiel : un modèle avancé doit au minimum le battre pour être utile.
+
+\subsection{Moyenne mobile}
+Le modèle de moyenne mobile de prévision utilise les $m$ dernières observations :
+\[
+\hat{Y}_{t+1} = \frac{1}{m}\sum_{i=0}^{m-1}Y_{t-i}
+\]
+Dans ce projet, $m=12$ pour capturer un historique annuel.
+
+\section{Métriques d'évaluation}
+Les métriques utilisées sont :
+\[
+MAE = \frac{1}{n}\sum_{t=1}^n |Y_t - \hat{Y}_t|
+\]
+\[
+MSE = \frac{1}{n}\sum_{t=1}^n (Y_t - \hat{Y}_t)^2
+\]
+\[
+RMSE = \sqrt{MSE}
+\]
+Le MAE est directement interprétable dans l'unité de la série. Le RMSE pénalise davantage les grandes erreurs et reste interprétable dans la même unité.
+
+\section{Walk-forward validation}
+La validation walk-forward consiste à prédire une observation, ajouter la vraie valeur à l'historique, puis prédire la suivante. Cette logique respecte la chronologie et simule une vraie situation de prévision.
+
+\section{Modèles AR, MA et ARMA}
+\subsection{Modèle AR(p)}
+Un modèle autorégressif d'ordre $p$ est :
+\[
+Y_t = c + \phi_1Y_{t-1} + \phi_2Y_{t-2} + \cdots + \phi_pY_{t-p} + \varepsilon_t
+\]
+Avec l'opérateur de retard :
+\[
+\Phi(L)Y_t = c + \varepsilon_t, \quad \Phi(L)=1-\phi_1L-\cdots-\phi_pL^p
+\]
+La condition de stationnarité est que les racines de $\Phi(z)=0$ soient à l'extérieur du cercle unité.
+
+\subsection{Modèle MA(q)}
+Un modèle moyenne mobile d'ordre $q$ est :
+\[
+Y_t = \mu + \varepsilon_t + \theta_1\varepsilon_{t-1} + \cdots + \theta_q\varepsilon_{t-q}
+\]
+Avec l'opérateur de retard :
+\[
+Y_t = \mu + \Theta(L)\varepsilon_t, \quad \Theta(L)=1+\theta_1L+\cdots+\theta_qL^q
+\]
+La condition d'inversibilité est que les racines de $\Theta(z)=0$ soient à l'extérieur du cercle unité.
+
+\subsection{Modèle ARMA(p,q)}
+Le modèle ARMA combine les deux mécanismes :
+\[
+\Phi(L)Y_t = c + \Theta(L)\varepsilon_t
+\]
+Il doit satisfaire simultanément la stationnarité de la partie AR et l'inversibilité de la partie MA.
+
+\section{Boîte noire ouverte : estimation des paramètres}
+\subsection{Moindres carrés ordinaires pour AR(p)}
+Pour un AR(p), on construit une matrice de design :
+\[
+X = \begin{bmatrix}
+1 & Y_p & Y_{p-1} & \cdots & Y_1 \\
+1 & Y_{p+1} & Y_p & \cdots & Y_2 \\
+\vdots & \vdots & \vdots & & \vdots
+\end{bmatrix}
+\]
+Le vecteur des paramètres est estimé par :
+\[
+\hat{\beta} = (X'X)^{-1}X'Y
+\]
+Cette formule a été utilisée dans le notebook pour coder un AR(p) \textit{from scratch} avec NumPy.
+
+\subsection{Maximum de vraisemblance}
+Pour ARMA et ARIMA, les bibliothèques utilisent souvent le maximum de vraisemblance. Si les erreurs sont gaussiennes :
+\[
+\mathcal{L}(\theta) = \prod_{t=1}^n \frac{1}{\sqrt{2\pi\sigma^2}}\exp\left(-\frac{\varepsilon_t^2}{2\sigma^2}\right)
+\]
+On maximise la log-vraisemblance, ou de manière équivalente on minimise une fonction liée à la somme des erreurs au carré.
+
+\subsection{Yule-Walker}
+Pour un AR(p), les équations de Yule-Walker relient les autocorrélations aux paramètres :
+\[
+\rho(k) = \phi_1\rho(k-1)+\cdots+\phi_p\rho(k-p)
+\]
+Elles permettent de résoudre un système linéaire pour estimer $\phi_1, \ldots, \phi_p$.
+
+\subsection{MA(q) et ARMA(p,q) from scratch}
+Pour MA(q), les résidus passés ne sont pas observés directement. L'estimation nécessite donc une procédure itérative : initialiser les résidus, calculer les prédictions, mettre à jour les erreurs, puis optimiser les paramètres. Pour ARMA(p,q), on combine les retards de la série et les retards des résidus. Les paramètres obtenus sont ensuite comparés à ceux de \texttt{statsmodels}.
+
+\section{ARIMA et SARIMA}
+Un modèle ARIMA est :
+\[
+ARIMA(p,d,q)
+\]
+où $p$ est l'ordre AR, $d$ le nombre de différenciations, et $q$ l'ordre MA. En notation opérateur :
+\[
+\Phi(L)(1-L)^dY_t = c + \Theta(L)\varepsilon_t
+\]
+
+Pour une série mensuelle avec saisonnalité annuelle, on peut utiliser SARIMA :
+\[
+SARIMA(p,d,q)(P,D,Q)_s
+\]
+où $s=12$ pour des données mensuelles.
+
+\section{Sélection par AIC et BIC}
+Les critères sont :
+\[
+AIC = -2\log(\mathcal{L}) + 2k
+\]
+\[
+BIC = -2\log(\mathcal{L}) + k\log(n)
+\]
+AIC et BIC pénalisent la complexité. Le BIC pénalise plus fortement les modèles avec beaucoup de paramètres.
+
+\chapter{Évaluation et diagnostic}
+\section{Comparaison des performances}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{figures_champagne_report/champagne_17_cell58_out0.jpg}
+\caption{Prévision du meilleur modèle sur la période test.}
+\label{fig:champ-forecast}
+\end{figure}
+
+\begin{longtable}{p{6.8cm}rrrrr}
+\toprule
+Modèle & MAE & MSE & RMSE & AIC & BIC \\
+\midrule
+\endfirsthead
+\toprule
+Modèle & MAE & MSE & RMSE & AIC & BIC \\
+\midrule
+\endhead
+\texttt{SARIMA(1, 1, 0)x(1, 1, 0, 12)} & 845.43 & 967 451 & 983.59 & 963.85 & 970.03 \\
+\texttt{SARIMA(1, 1, 1)x(0, 1, 1, 12)} & 947.29 & 1 236 808 & 1 112.12 & 934.89 & 943.06 \\
+\texttt{SARIMA(0, 1, 1)x(0, 1, 1, 12)} & 1 106.51 & 1 623 138 & 1 274.02 & 933.81 & 939.94 \\
+\texttt{Moyenne mobile 12 mois} & 1 711.82 & 5 775 915 & 2 403.31 & nan & nan \\
+\texttt{ARIMA(0, 0, 1)} & 1 602.78 & 6 700 910 & 2 588.61 & 1 532.42 & 1 539.71 \\
+\texttt{ARIMA(1, 0, 1)} & 1 701.76 & 7 273 380 & 2 696.92 & 1 534.35 & 1 544.07 \\
+\texttt{ARIMA(2, 0, 0)} & 1 722.49 & 7 287 042 & 2 699.45 & 1 533.24 & 1 542.96 \\
+\texttt{ARIMA(2, 1, 1)} & 2 034.30 & 7 555 592 & 2 748.74 & 1 518.17 & 1 527.84 \\
+\texttt{ARIMA(2, 0, 1)} & 1 883.19 & 7 594 358 & 2 755.79 & 1 533.81 & 1 545.97 \\
+\texttt{ARIMA(1, 1, 2)} & 2 117.36 & 7 692 326 & 2 773.50 & 1 519.39 & 1 529.07 \\
+\texttt{ARIMA(1, 0, 0)} & 1 881.73 & 8 145 008 & 2 853.95 & 1 536.71 & 1 544.00 \\
+\texttt{ARIMA(2, 1, 2)} & 2 220.36 & 8 244 465 & 2 871.32 & 1 518.23 & 1 530.32 \\
+\bottomrule
+\end{longtable}
+
+Le meilleur modèle selon le RMSE sur l'ensemble test est \texttt{SARIMA(1, 1, 0)x(1, 1, 0, 12)}. Il obtient une MAE de \textbf{845.43} et un RMSE de \textbf{983.59}. Par rapport au modèle naïf, dont le RMSE est \textbf{3 316.74}, le gain relatif est d'environ \textbf{70.34}\%.
+
+Le modèle SARIMA retenu est cohérent avec la nature de la série : les ventes de champagne ont une saisonnalité annuelle très forte. Les modèles ARIMA non saisonniers ne capturent pas suffisamment les pics récurrents de fin d'année, ce qui explique leurs erreurs plus élevées.
+
+\section{Analyse des résidus}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{figures_champagne_report/champagne_18_cell62_out0.jpg}
+\caption{Résidus du modèle final.}
+\label{fig:champ-resid}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{figures_champagne_report/champagne_19_cell62_out1.jpg}
+\caption{Distribution des résidus.}
+\label{fig:champ-resid-hist}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{figures_champagne_report/champagne_20_cell62_out2.jpg}
+\caption{ACF des résidus.}
+\label{fig:champ-resid-acf}
+\end{figure}
+
+Un bon modèle doit laisser des résidus proches d'un bruit blanc : moyenne proche de zéro, absence d'autocorrélation et variance aussi stable que possible.
+
+Le test de Ljung-Box vérifie :
+\[
+H_0 : \text{les résidus ne sont pas autocorrélés}, \qquad H_1 : \text{les résidus sont autocorrélés}
+\]
+La statistique est :
+\[
+Q = n(n+2)\sum_{k=1}^h \frac{\hat{\rho}_k^2}{n-k}
+\]
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lrr}
+\toprule
+Test & Statistique & p-value \\
+\midrule
+Ljung-Box lag 10 & 10.594 & 0.3900 \\
+Shapiro-Wilk normalité & 0.870 & 0.0000 \\
+ARCH homoscédasticité & 2.533 & 0.9904 \\
+\bottomrule
+\end{tabular}
+\caption{Tests de diagnostic des résidus du modèle final.}
+\end{table}
+
+Les résidus ont une moyenne d'environ \textbf{-2.564} et un écart-type d'environ \textbf{1 184.05}. Le test de Ljung-Box a une p-value de \textbf{0.3900}. Comme elle est supérieure à 5\%, on ne rejette pas l'hypothèse d'absence d'autocorrélation, ce qui est favorable. Le test de normalité peut être plus sensible, surtout avec des séries économiques ou sociales où les valeurs extrêmes existent. Le test ARCH donne une indication sur la stabilité de la variance des résidus.
+
+\section{Risques méthodologiques}
+\subsection{Data leakage}
+Le \textit{data leakage} apparaît lorsqu'une information future est utilisée pendant l'entraînement. Il est évité ici par un découpage chronologique et une validation walk-forward.
+
+\subsection{Surapprentissage}
+Le surapprentissage se produit lorsqu'un modèle s'adapte trop aux données d'entraînement et généralise mal. Il est limité par la comparaison train/test, les critères AIC/BIC et l'analyse des résidus.
+
+\section{Choix final}
+Le choix final combine les performances, la simplicité, l'interprétabilité, les critères AIC/BIC et les diagnostics des résidus. Le modèle retenu est donc \texttt{SARIMA(1, 1, 0)x(1, 1, 0, 12)}, car il offre le meilleur compromis observé dans les résultats du notebook.
+
+\chapter{Conclusion}
+Dans le contexte des ventes mensuelles de champagne en France, l'analyse met en évidence une forte saisonnalité annuelle : les ventes augmentent fortement en fin d'année, particulièrement en novembre et décembre. La moyenne mobile montre une évolution du niveau moyen et l'écart-type mobile indique que la variabilité augmente avec le niveau de la série. Les tests ADF et KPSS confirment que la série originale n'est pas stationnaire. Une différenciation d'ordre 1 et une composante saisonnière sont donc nécessaires. Le modèle SARIMA retenu améliore nettement les modèles non saisonniers, ce qui confirme l'importance de la saisonnalité annuelle dans cette série.
+
+\section{Limites}
+\begin{itemize}
+    \item La série est univariée : elle n'intègre pas de variables explicatives externes.
+    \item Les modèles ARIMA/SARIMA supposent une structure linéaire.
+    \item Les événements exceptionnels peuvent produire des résidus difficiles à modéliser.
+    \item Les performances dépendent du découpage train/test et de la période considérée.
+\end{itemize}
+
+\section{Améliorations possibles}
+\begin{itemize}
+    \item tester davantage de combinaisons ARIMA/SARIMA ;
+    \item utiliser une validation walk-forward complète pour tous les modèles ;
+    \item intégrer des variables explicatives via SARIMAX ;
+    \item comparer avec des modèles de lissage exponentiel ou Prophet ;
+    \item étudier des transformations Box-Cox pour stabiliser la variance.
+\end{itemize}
+
+\chapter*{Annexe : structure du code}
+\addcontentsline{toc}{chapter}{Annexe : structure du code}
+Le notebook associé suit les étapes suivantes :
+\begin{enumerate}
+    \item chargement du fichier CSV et préparation de l'index temporel ;
+    \item analyse exploratoire et statistiques descriptives ;
+    \item moyenne mobile, décomposition et hypothèses ;
+    \item tests ADF/KPSS et transformations ;
+    \item ACF/PACF et identification préliminaire ;
+    \item découpage train/test ;
+    \item baselines codées avec NumPy ;
+    \item AR, MA, ARMA from scratch ;
+    \item ARIMA/SARIMA avec \texttt{statsmodels} ;
+    \item comparaison, diagnostic des résidus et conclusion.
+\end{enumerate}
+
+\end{document}

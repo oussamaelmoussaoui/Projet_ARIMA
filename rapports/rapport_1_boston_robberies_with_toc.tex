@@ -1,0 +1,605 @@
+
+\documentclass[12pt,a4paper]{report}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage{geometry}
+\usepackage{amsmath, amssymb}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{float}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\geometry{margin=2.4cm}
+\hypersetup{colorlinks=true, linkcolor=blue, urlcolor=blue}
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{TIME SERIES}
+\rhead{Projet ARIMA}
+\cfoot{\thepage}
+\lstset{
+    basicstyle=\ttfamily\small,
+    breaklines=true,
+    frame=single,
+    backgroundcolor=\color{gray!7},
+    keywordstyle=\color{blue},
+    commentstyle=\color{gray},
+    stringstyle=\color{teal}
+}
+\title{\textbf{Rapport 1 -- Monthly Armed Robberies in Boston}\\[0.4cm]\large Projet de séries temporelles}
+\author{\textbf{Membres du groupe}\\ EL MOUSSAOUI Oussama\\
+SAIDI Mohammed\\
+OURIARHI Mohammed\\
+BENHADDOU HOUCEIN \\[0.5cm]\textbf{Professeur :} ABDELWAHAB NAJI\\\textbf{Module :} TIME SERIES}
+\date{Année universitaire 2025--2026}
+\begin{document}
+\maketitle
+\clearpage
+\renewcommand{\contentsname}{Table des matières}
+\tableofcontents
+\clearpage
+
+\chapter*{Résumé exécutif}
+\addcontentsline{toc}{chapter}{Résumé exécutif}
+Ce rapport présente une étude complète de série temporelle appliquée au jeu de données \textbf{Monthly Armed Robberies in Boston}. L'objectif est d'analyser la dynamique temporelle, d'étudier la stationnarité, de préparer la série, de construire des modèles de référence, puis de comparer des modèles AR, MA, ARMA, ARIMA et SARIMA. Le travail suit la structure méthodologique exigée dans l'énoncé du projet : analyse exploratoire, transformation, identification, modélisation, évaluation, diagnostic et conclusion.
+
+Le code associé est organisé dans le notebook \texttt{01\_boston\_robberies\_arima.ipynb}. Le rapport ne se limite pas aux résultats numériques : chaque choix est justifié afin de montrer la logique de raisonnement et non uniquement l'application technique.
+
+\chapter{Présentation du problème et des données}
+\section{Contexte}
+La série \textit{Monthly Armed Robberies in Boston} représente le nombre mensuel de vols à main armée enregistrés à Boston. L'étude de cette série permet de comprendre l'évolution temporelle d'un phénomène social et criminel. La prévision peut aider à anticiper des périodes de forte activité et à mieux planifier les ressources de sécurité.
+
+La série est constituée de \textbf{118 observations mensuelles}, allant de \textbf{1966-01-01} à \textbf{1975-10-01}. La colonne temporelle est \texttt{Months} et la variable étudiée est \texttt{Robberies}. Après conversion en dates, l'index a été forcé en fréquence mensuelle de début de mois avec \texttt{asfreq("MS")}, ce qui permet aux méthodes de séries temporelles de reconnaître explicitement la périodicité mensuelle.
+
+\section{Objectifs de l'étude}
+Les objectifs principaux sont :
+\begin{itemize}
+    \item décrire la série et identifier les caractéristiques visuelles importantes ;
+    \item vérifier la présence de tendance, saisonnalité et variance non constante ;
+    \item tester la stationnarité avec les tests ADF et KPSS ;
+    \item appliquer les transformations nécessaires : logarithme, racine carrée si utile, différenciation ;
+    \item identifier des ordres ARIMA à partir des graphiques ACF et PACF ;
+    \item comparer des modèles simples et avancés avec des métriques interprétables ;
+    \item diagnostiquer les résidus du modèle final.
+\end{itemize}
+
+\chapter{Analyse exploratoire}
+\section{Statistiques descriptives}
+Soit une série temporelle $(Y_t)_{t=1}^n$. La moyenne empirique est :
+\[
+\bar{Y} = \frac{1}{n}\sum_{t=1}^n Y_t
+\]
+La variance empirique est :
+\[
+s^2 = \frac{1}{n-1}\sum_{t=1}^n (Y_t - \bar{Y})^2
+\]
+L'écart-type est :
+\[
+s = \sqrt{s^2}
+\]
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lr}
+\toprule
+Indicateur & Valeur \\
+\midrule
+Nombre d'observations & 118 \\
+Minimum & 29.00 \\
+Maximum & 500.00 \\
+Moyenne & 196.29 \\
+Variance & 16 395.16 \\
+Écart-type & 128.04 \\
+\bottomrule
+\end{tabular}
+\caption{Statistiques descriptives de la série.}
+\end{table}
+
+Ces statistiques montrent une dispersion importante. Le maximum est nettement supérieur au minimum, ce qui indique que le niveau de la série varie fortement au cours du temps. L'écart-type représente l'erreur typique autour du niveau moyen dans l'unité du problème.
+
+\section{Visualisation de la série}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{figures_boston_report/boston_01_cell6_out1.jpg}
+\caption{Visualisation de la série mensuelle des vols à main armée à Boston.}
+\label{fig:boston-series}
+\end{figure}
+
+La visualisation temporelle montre que la série n'est pas simplement un bruit autour d'une moyenne constante. On observe des variations organisées dans le temps, ce qui justifie l'utilisation d'une approche de séries temporelles.
+
+\section{Moyenne mobile et écart-type mobile}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{figures_boston_report/boston_rolling_12.jpg}
+\caption{Moyenne mobile et écart-type mobile sur une fenêtre de 12 mois.}
+\label{fig:boston-rolling}
+\end{figure}
+
+La moyenne mobile d'ordre $m$ est définie par :
+\[
+MA_t = \frac{1}{m} \sum_{i=0}^{m-1} Y_{t-i}
+\]
+Dans ce projet, $m=12$ afin de lisser un cycle annuel complet. L'écart-type mobile mesure la variabilité locale sur la même fenêtre.
+
+Pour cette série, la moyenne mobile sur 12 mois passe d'environ \textbf{40.17} au début de la période à environ \textbf{401.08} à la fin. L'écart-type mobile passe d'environ \textbf{5.91} à environ \textbf{56.73}. Cette évolution indique que le niveau moyen et la variabilité ne sont pas constants.
+
+\section{Saisonnalité additive ou multiplicative}
+Un modèle additif suppose :
+\[
+Y_t = T_t + S_t + R_t
+\]
+Un modèle multiplicatif suppose :
+\[
+Y_t = T_t \times S_t \times R_t
+\]
+La décision peut être guidée par l'amplitude annuelle $\max(Y)-\min(Y)$ et le ratio annuel $\max(Y)/\min(Y)$.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lrr}
+\toprule
+Année & Amplitude annuelle & Ratio max/min \\
+\midrule
+1966 & 21.00 & 1.724 \\
+1967 & 58.00 & 2.812 \\
+1968 & 94.00 & 2.709 \\
+1969 & 81.00 & 2.052 \\
+1972 & 141.00 & 1.665 \\
+1973 & 152.00 & 1.610 \\
+1974 & 246.00 & 2.021 \\
+\bottomrule
+\end{tabular}
+\caption{Amplitude et ratio annuels pour la série Monthly Armed Robberies in Boston.}
+\end{table}
+
+Dans une saisonnalité additive, l'amplitude saisonnière reste approximativement constante. Dans une saisonnalité multiplicative, l'effet saisonnier est plutôt proportionnel au niveau de la série. Ici, l'amplitude passe d'environ \textbf{21.00} à environ \textbf{246.00}, tandis que le ratio évolue de \textbf{1.724} vers \textbf{2.021}. La série montre surtout une tendance croissante et une variabilité qui augmente avec le niveau. La saisonnalité est moins évidente que dans une série commerciale mensuelle, mais les modèles saisonniers sont testés afin de vérifier si un motif annuel améliore la prévision.
+
+\section{Décomposition de la série}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{figures_boston_report/boston_02_cell10_out0.jpg}
+\caption{Décomposition additive de la série Boston Robberies.}
+\label{fig:boston-add}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{figures_boston_report/boston_03_cell10_out2.jpg}
+\caption{Décomposition multiplicative de la série Boston Robberies.}
+\label{fig:boston-mul}
+\end{figure}
+
+La décomposition sépare la série en tendance, saisonnalité et résidu.
+
+Pour la décomposition additive, les composantes saisonnières et résiduelles sont exprimées dans l'unité originale de la série. Dans ce cas, la composante saisonnière varie entre \textbf{-35.78} et \textbf{29.21}, et les résidus entre \textbf{-93.04} et \textbf{89.56}. Ces valeurs représentent des quantités ajoutées ou retirées à la tendance.
+
+Pour la décomposition multiplicative, les composantes saisonnières et résiduelles sont des coefficients. La saisonnalité varie entre \textbf{0.826} et \textbf{1.130}, tandis que les résidus varient entre \textbf{0.650} et \textbf{1.450}. Une valeur supérieure à 1 signifie que l'observation est supérieure au niveau attendu, et une valeur inférieure à 1 signifie l'inverse.
+
+\section{Premières hypothèses}
+À partir de l'analyse exploratoire, on formule les hypothèses suivantes :
+\begin{itemize}
+    \item la série présente une tendance, donc la moyenne n'est probablement pas constante ;
+    \item une composante saisonnière peut exister, surtout si certains mois se répètent avec des comportements similaires ;
+    \item la variance semble évoluer avec le temps ;
+    \item une transformation et/ou une différenciation seront probablement nécessaires avant la modélisation ARIMA.
+\end{itemize}
+
+\chapter{Transformation et préparation}
+\section{Feature engineering}
+Les variables temporelles utiles construites dans le notebook sont : l'année, le mois, le trimestre, les retards de la série et les moyennes mobiles. Par exemple :
+\begin{lstlisting}[language=Python]
+df["year"] = df.index.year
+df["month"] = df.index.month
+df["lag_1"] = df["Robberies"].shift(1)
+df["rolling_mean_12"] = df["Robberies"].rolling(12).mean()
+\end{lstlisting}
+Ces variables servent à mieux comprendre la dynamique temporelle et à vérifier visuellement les comportements cycliques.
+
+\section{Tests de stationnarité}
+La stationnarité signifie que les propriétés statistiques de la série restent stables dans le temps, notamment la moyenne, la variance et l'autocovariance.
+
+\subsection{Test ADF}
+Le test Augmented Dickey-Fuller vérifie la présence d'une racine unitaire. Les hypothèses sont :
+\[
+H_0 : \text{la série n'est pas stationnaire}, \qquad H_1 : \text{la série est stationnaire}
+\]
+Si la p-value est inférieure à $5\%$, on rejette $H_0$.
+
+\subsection{Test KPSS}
+Le test KPSS utilise les hypothèses inverses :
+\[
+H_0 : \text{la série est stationnaire}, \qquad H_1 : \text{la série n'est pas stationnaire}
+\]
+Si la p-value est inférieure à $5\%$, on rejette la stationnarité.
+
+Le seuil de $5\%$ est le risque accepté de rejeter à tort l'hypothèse nulle.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lrrrr}
+\toprule
+Série testée & Stat ADF & p-value ADF & Stat KPSS & p-value KPSS \\
+\midrule
+Série originale & 1.001 & 0.9943 & 1.712 & 0.0100 \\
+Transformation log & -2.013 & 0.2808 & 1.695 & 0.0100 \\
+Différence d'ordre 1 & -7.429 & 0.0000 & 0.132 & 0.1000 \\
+Log + différence d'ordre 1 & -7.602 & 0.0000 & 0.090 & 0.1000 \\
+\bottomrule
+\end{tabular}
+\caption{Synthèse des tests de stationnarité.}
+\end{table}
+
+La série originale n'est pas stationnaire : le test ADF ne rejette pas l'hypothèse de non-stationnarité, et le test KPSS rejette la stationnarité. Après différenciation d'ordre 1, l'ADF devient significatif et le KPSS ne rejette plus la stationnarité. La transformation logarithmique seule ne suffit généralement pas, mais le log-différencié améliore nettement la stabilité.
+
+\section{Transformations}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{figures_boston_report/boston_04_cell20_out0.jpg}
+\caption{Transformation logarithmique de la série.}
+\label{fig:boston-log}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{figures_boston_report/boston_06_cell20_out2.jpg}
+\caption{Différenciation d'ordre 1 de la série.}
+\label{fig:boston-diff}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{figures_boston_report/boston_07_cell20_out3.jpg}
+\caption{Transformation logarithmique suivie d'une différenciation.}
+\label{fig:boston-logdiff}
+\end{figure}
+
+La transformation logarithmique est :
+\[
+Z_t = \log(Y_t)
+\]
+Elle est utile lorsque la variance augmente avec le niveau. La racine carrée :
+\[
+Z_t = \sqrt{Y_t}
+\]
+est une transformation plus douce, souvent utilisée pour des données positives de type comptage ou volume.
+
+La différenciation d'ordre 1 est définie par :
+\[
+\nabla Y_t = Y_t - Y_{t-1}
+\]
+Avec l'opérateur de retard $L$, tel que $LY_t = Y_{t-1}$, on écrit :
+\[
+\nabla Y_t = (1-L)Y_t
+\]
+La différenciation d'ordre $d$ est :
+\[
+\nabla^d Y_t = (1-L)^d Y_t
+\]
+
+Dans notre cas, les résultats montrent que $d=1$ est une hypothèse raisonnable pour rendre la série stationnaire.
+
+\section{Analyse ACF/PACF}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.82\textwidth]{figures_boston_report/boston_10_cell22_out3.jpg}
+\caption{ACF de la série différenciée.}
+\label{fig:boston-acf-diff}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.82\textwidth]{figures_boston_report/boston_12_cell22_out7.jpg}
+\caption{PACF de la série différenciée.}
+\label{fig:boston-pacf-diff}
+\end{figure}
+
+L'autocorrélation au lag $k$ est :
+\[
+\rho(k) = \frac{\gamma(k)}{\gamma(0)}
+\]
+où
+\[
+\gamma(k) = Cov(Y_t, Y_{t-k})
+\]
+La PACF mesure la corrélation entre $Y_t$ et $Y_{t-k}$ après suppression de l'effet des retards intermédiaires.
+
+Les premières autocorrélations de la série différenciée sont :
+\[
+ACF_{1:6} = -0.259, -0.137, 0.156, -0.238, 0.113, -0.055
+\]
+Les premières autocorrélations partielles sont :
+\[
+PACF_{1:6} = -0.259, -0.219, 0.062, -0.229, 0.026, -0.125
+\]
+Ces valeurs suggèrent de tester des modèles avec des ordres faibles, par exemple $p \in \{0,1,2\}$ et $q \in \{0,1,2\}$, puis de comparer avec AIC, BIC et les erreurs de prévision.
+
+\section{Découpage train/test}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{figures_boston_report/boston_13_cell24_out1.jpg}
+\caption{Découpage chronologique en train et test.}
+\label{fig:boston-train-test}
+\end{figure}
+
+Le découpage respecte l'ordre chronologique :
+\begin{itemize}
+    \item train : 94 observations, de 1966-01-01 à 1973-10-01 ;
+    \item test : 24 observations, de 1973-11-01 à 1975-10-01.
+\end{itemize}
+Il ne faut pas mélanger aléatoirement les données, car cela créerait du \textit{data leakage} : le modèle pourrait apprendre indirectement des informations du futur.
+
+\chapter{Modélisation}
+\section{Modèles de référence}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{figures_boston_report/boston_14_cell30_out1.jpg}
+\caption{Comparaison des baselines : modèle naïf et moyenne mobile.}
+\label{fig:boston-baselines}
+\end{figure}
+
+\subsection{Modèle naïf}
+Le modèle naïf prédit que la prochaine valeur sera égale à la dernière valeur observée :
+\[
+\hat{Y}_{t+1} = Y_t
+\]
+Il est simple mais essentiel : un modèle avancé doit au minimum le battre pour être utile.
+
+\subsection{Moyenne mobile}
+Le modèle de moyenne mobile de prévision utilise les $m$ dernières observations :
+\[
+\hat{Y}_{t+1} = \frac{1}{m}\sum_{i=0}^{m-1}Y_{t-i}
+\]
+Dans ce projet, $m=12$ pour capturer un historique annuel.
+
+\section{Métriques d'évaluation}
+Les métriques utilisées sont :
+\[
+MAE = \frac{1}{n}\sum_{t=1}^n |Y_t - \hat{Y}_t|
+\]
+\[
+MSE = \frac{1}{n}\sum_{t=1}^n (Y_t - \hat{Y}_t)^2
+\]
+\[
+RMSE = \sqrt{MSE}
+\]
+Le MAE est directement interprétable dans l'unité de la série. Le RMSE pénalise davantage les grandes erreurs et reste interprétable dans la même unité.
+
+\section{Walk-forward validation}
+La validation walk-forward consiste à prédire une observation, ajouter la vraie valeur à l'historique, puis prédire la suivante. Cette logique respecte la chronologie et simule une vraie situation de prévision.
+
+\section{Modèles AR, MA et ARMA}
+\subsection{Modèle AR(p)}
+Un modèle autorégressif d'ordre $p$ est :
+\[
+Y_t = c + \phi_1Y_{t-1} + \phi_2Y_{t-2} + \cdots + \phi_pY_{t-p} + \varepsilon_t
+\]
+Avec l'opérateur de retard :
+\[
+\Phi(L)Y_t = c + \varepsilon_t, \quad \Phi(L)=1-\phi_1L-\cdots-\phi_pL^p
+\]
+La condition de stationnarité est que les racines de $\Phi(z)=0$ soient à l'extérieur du cercle unité.
+
+\subsection{Modèle MA(q)}
+Un modèle moyenne mobile d'ordre $q$ est :
+\[
+Y_t = \mu + \varepsilon_t + \theta_1\varepsilon_{t-1} + \cdots + \theta_q\varepsilon_{t-q}
+\]
+Avec l'opérateur de retard :
+\[
+Y_t = \mu + \Theta(L)\varepsilon_t, \quad \Theta(L)=1+\theta_1L+\cdots+\theta_qL^q
+\]
+La condition d'inversibilité est que les racines de $\Theta(z)=0$ soient à l'extérieur du cercle unité.
+
+\subsection{Modèle ARMA(p,q)}
+Le modèle ARMA combine les deux mécanismes :
+\[
+\Phi(L)Y_t = c + \Theta(L)\varepsilon_t
+\]
+Il doit satisfaire simultanément la stationnarité de la partie AR et l'inversibilité de la partie MA.
+
+\section{Boîte noire ouverte : estimation des paramètres}
+\subsection{Moindres carrés ordinaires pour AR(p)}
+Pour un AR(p), on construit une matrice de design :
+\[
+X = \begin{bmatrix}
+1 & Y_p & Y_{p-1} & \cdots & Y_1 \\
+1 & Y_{p+1} & Y_p & \cdots & Y_2 \\
+\vdots & \vdots & \vdots & & \vdots
+\end{bmatrix}
+\]
+Le vecteur des paramètres est estimé par :
+\[
+\hat{\beta} = (X'X)^{-1}X'Y
+\]
+Cette formule a été utilisée dans le notebook pour coder un AR(p) \textit{from scratch} avec NumPy.
+
+\subsection{Maximum de vraisemblance}
+Pour ARMA et ARIMA, les bibliothèques utilisent souvent le maximum de vraisemblance. Si les erreurs sont gaussiennes :
+\[
+\mathcal{L}(\theta) = \prod_{t=1}^n \frac{1}{\sqrt{2\pi\sigma^2}}\exp\left(-\frac{\varepsilon_t^2}{2\sigma^2}\right)
+\]
+On maximise la log-vraisemblance, ou de manière équivalente on minimise une fonction liée à la somme des erreurs au carré.
+
+\subsection{Yule-Walker}
+Pour un AR(p), les équations de Yule-Walker relient les autocorrélations aux paramètres :
+\[
+\rho(k) = \phi_1\rho(k-1)+\cdots+\phi_p\rho(k-p)
+\]
+Elles permettent de résoudre un système linéaire pour estimer $\phi_1, \ldots, \phi_p$.
+
+\subsection{MA(q) et ARMA(p,q) from scratch}
+Pour MA(q), les résidus passés ne sont pas observés directement. L'estimation nécessite donc une procédure itérative : initialiser les résidus, calculer les prédictions, mettre à jour les erreurs, puis optimiser les paramètres. Pour ARMA(p,q), on combine les retards de la série et les retards des résidus. Les paramètres obtenus sont ensuite comparés à ceux de \texttt{statsmodels}.
+
+\section{ARIMA et SARIMA}
+Un modèle ARIMA est :
+\[
+ARIMA(p,d,q)
+\]
+où $p$ est l'ordre AR, $d$ le nombre de différenciations, et $q$ l'ordre MA. En notation opérateur :
+\[
+\Phi(L)(1-L)^dY_t = c + \Theta(L)\varepsilon_t
+\]
+
+Pour une série mensuelle avec saisonnalité annuelle, on peut utiliser SARIMA :
+\[
+SARIMA(p,d,q)(P,D,Q)_s
+\]
+où $s=12$ pour des données mensuelles.
+
+\section{Sélection par AIC et BIC}
+Les critères sont :
+\[
+AIC = -2\log(\mathcal{L}) + 2k
+\]
+\[
+BIC = -2\log(\mathcal{L}) + k\log(n)
+\]
+AIC et BIC pénalisent la complexité. Le BIC pénalise plus fortement les modèles avec beaucoup de paramètres.
+
+\chapter{Évaluation et diagnostic}
+\section{Comparaison des performances}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{figures_boston_report/boston_15_cell57_out0.jpg}
+\caption{Prévision finale sur l'ensemble de test avec le meilleur modèle ARIMA/SARIMA.}
+\label{fig:boston-forecast}
+\end{figure}
+
+\begin{longtable}{p{6.8cm}rrrrr}
+\toprule
+Modèle & MAE & MSE & RMSE & AIC & BIC \\
+\midrule
+\endfirsthead
+\toprule
+Modèle & MAE & MSE & RMSE & AIC & BIC \\
+\midrule
+\endhead
+\texttt{SARIMA(2, 1, 1)x(1, 1, 1, 12)} & 43.92 & 3 356.21 & 57.93 & 675.44 & 688.66 \\
+\texttt{SARIMA(0, 1, 1)x(1, 1, 1, 12)} & 44.00 & 3 378.92 & 58.13 & 672.14 & 680.96 \\
+\texttt{SARIMA(1, 1, 1)x(1, 1, 1, 12)} & 43.97 & 3 389.97 & 58.22 & 673.54 & 684.56 \\
+\texttt{SARIMA(0, 1, 1)x(0, 1, 1, 12)} & 44.18 & 3 410.89 & 58.40 & 670.72 & 677.33 \\
+\texttt{SARIMA(1, 1, 1)x(0, 1, 1, 12)} & 44.20 & 3 437.15 & 58.63 & 672.21 & 681.02 \\
+\texttt{Naif walk-forward} & 46.54 & 3 540.88 & 59.51 & nan & nan \\
+\texttt{SARIMA(1, 1, 0)x(1, 1, 0, 12)} & 48.91 & 3 969.17 & 63.00 & 699.49 & 706.15 \\
+\texttt{Moyenne mobile 12 mois} & 56.85 & 5 357.77 & 73.20 & nan & nan \\
+\texttt{ARIMA(2, 1, 1)} & 65.94 & 6 504.99 & 80.65 & 915.67 & 925.80 \\
+\texttt{ARIMA(2, 1, 2)} & 66.71 & 6 670.04 & 81.67 & 915.85 & 928.52 \\
+\texttt{ARIMA(1, 1, 2)} & 66.76 & 6 680.21 & 81.73 & 913.85 & 923.98 \\
+\texttt{ARIMA(0, 1, 1)} & 67.37 & 6 806.32 & 82.50 & 915.13 & 920.19 \\
+\bottomrule
+\end{longtable}
+
+Le meilleur modèle selon le RMSE sur l'ensemble test est \texttt{SARIMA(2, 1, 1)x(1, 1, 1, 12)}. Il obtient une MAE de \textbf{43.92} et un RMSE de \textbf{57.93}. Par rapport au modèle naïf, dont le RMSE est \textbf{59.51}, le gain relatif est d'environ \textbf{2.64}\%.
+
+Le modèle saisonnier obtient une performance légèrement supérieure aux baselines. Même si le gain par rapport au modèle naïf est modéré, il montre que l'intégration de la différenciation et d'une composante saisonnière peut mieux représenter la dynamique temporelle que les références simples.
+
+\section{Analyse des résidus}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{figures_boston_report/boston_17_cell61_out1.jpg}
+\caption{Résidus du meilleur modèle.}
+\label{fig:boston-resid}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.82\textwidth]{figures_boston_report/boston_18_cell61_out2.jpg}
+\caption{Distribution des résidus.}
+\label{fig:boston-resid-hist}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.82\textwidth]{figures_boston_report/boston_19_cell61_out3.jpg}
+\caption{ACF des résidus.}
+\label{fig:boston-resid-acf}
+\end{figure}
+
+Un bon modèle doit laisser des résidus proches d'un bruit blanc : moyenne proche de zéro, absence d'autocorrélation et variance aussi stable que possible.
+
+Le test de Ljung-Box vérifie :
+\[
+H_0 : \text{les résidus ne sont pas autocorrélés}, \qquad H_1 : \text{les résidus sont autocorrélés}
+\]
+La statistique est :
+\[
+Q = n(n+2)\sum_{k=1}^h \frac{\hat{\rho}_k^2}{n-k}
+\]
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lrr}
+\toprule
+Test & Statistique & p-value \\
+\midrule
+Ljung-Box lag 10 & 13.338 & 0.2054 \\
+Shapiro-Wilk normalité & 0.968 & 0.0211 \\
+ARCH homoscédasticité & 23.322 & 0.0096 \\
+\bottomrule
+\end{tabular}
+\caption{Tests de diagnostic des résidus du modèle final.}
+\end{table}
+
+Les résidus ont une moyenne d'environ \textbf{2.706} et un écart-type d'environ \textbf{29.420}. Le test de Ljung-Box a une p-value de \textbf{0.2054}. Comme elle est supérieure à 5\%, on ne rejette pas l'hypothèse d'absence d'autocorrélation, ce qui est favorable. Le test de normalité peut être plus sensible, surtout avec des séries économiques ou sociales où les valeurs extrêmes existent. Le test ARCH donne une indication sur la stabilité de la variance des résidus.
+
+\section{Risques méthodologiques}
+\subsection{Data leakage}
+Le \textit{data leakage} apparaît lorsqu'une information future est utilisée pendant l'entraînement. Il est évité ici par un découpage chronologique et une validation walk-forward.
+
+\subsection{Surapprentissage}
+Le surapprentissage se produit lorsqu'un modèle s'adapte trop aux données d'entraînement et généralise mal. Il est limité par la comparaison train/test, les critères AIC/BIC et l'analyse des résidus.
+
+\section{Choix final}
+Le choix final combine les performances, la simplicité, l'interprétabilité, les critères AIC/BIC et les diagnostics des résidus. Le modèle retenu est donc \texttt{SARIMA(2, 1, 1)x(1, 1, 1, 12)}, car il offre le meilleur compromis observé dans les résultats du notebook.
+
+\chapter{Conclusion}
+Dans le contexte des vols à main armée à Boston, l'analyse montre une progression claire du niveau moyen au cours du temps. Les tests de stationnarité confirment que la série originale n'est pas stationnaire, principalement à cause de la tendance. La différenciation d'ordre 1 améliore fortement la stationnarité. Le modèle final sélectionné permet de réduire l'erreur par rapport aux modèles de référence, tout en capturant une partie de la dynamique temporelle. Métierement, cela signifie que les vols mensuels ne fluctuent pas autour d'un niveau constant : ils suivent une dynamique évolutive qui nécessite des modèles capables de traiter la tendance et les dépendances temporelles.
+
+\section{Limites}
+\begin{itemize}
+    \item La série est univariée : elle n'intègre pas de variables explicatives externes.
+    \item Les modèles ARIMA/SARIMA supposent une structure linéaire.
+    \item Les événements exceptionnels peuvent produire des résidus difficiles à modéliser.
+    \item Les performances dépendent du découpage train/test et de la période considérée.
+\end{itemize}
+
+\section{Améliorations possibles}
+\begin{itemize}
+    \item tester davantage de combinaisons ARIMA/SARIMA ;
+    \item utiliser une validation walk-forward complète pour tous les modèles ;
+    \item intégrer des variables explicatives via SARIMAX ;
+    \item comparer avec des modèles de lissage exponentiel ou Prophet ;
+    \item étudier des transformations Box-Cox pour stabiliser la variance.
+\end{itemize}
+
+\chapter*{Annexe : structure du code}
+\addcontentsline{toc}{chapter}{Annexe : structure du code}
+Le notebook associé suit les étapes suivantes :
+\begin{enumerate}
+    \item chargement du fichier CSV et préparation de l'index temporel ;
+    \item analyse exploratoire et statistiques descriptives ;
+    \item moyenne mobile, décomposition et hypothèses ;
+    \item tests ADF/KPSS et transformations ;
+    \item ACF/PACF et identification préliminaire ;
+    \item découpage train/test ;
+    \item baselines codées avec NumPy ;
+    \item AR, MA, ARMA from scratch ;
+    \item ARIMA/SARIMA avec \texttt{statsmodels} ;
+    \item comparaison, diagnostic des résidus et conclusion.
+\end{enumerate}
+
+\end{document}
