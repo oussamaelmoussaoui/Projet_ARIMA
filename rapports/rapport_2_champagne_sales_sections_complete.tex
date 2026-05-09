@@ -392,6 +392,27 @@ Le modèle de moyenne mobile de prévision utilise les $m$ dernières observatio
 \]
 Dans ce projet, $m=12$ pour capturer un historique annuel.
 
+
+\section{Rôle et nécessité des modèles de référence}
+Avant d'évaluer un modèle statistique, il est indispensable d'établir des références simples servant de seuil minimal de performance. Cette démarche répond à une question fondamentale : le modèle apporte-t-il réellement une valeur ajoutée par rapport à une prévision élémentaire ?
+
+Un modèle complexe consomme davantage de ressources computationnelles, introduit plus de paramètres à estimer et augmente le risque de surapprentissage. Il ne se justifie que s'il améliore significativement la précision. Deux références servent ici d'étalon :
+\begin{itemize}
+    \item le \textbf{modèle naïf}, qui suppose que le mois suivant sera identique au dernier mois observé. C'est le modèle le plus parcimonieux possible. S'il est difficile à battre, cela signale que la série ne contient pas de structure exploitable au-delà du dernier point connu ;
+    \item la \textbf{moyenne mobile}, qui lisse les fluctuations aléatoires en moyennant les $m$ dernières observations. Elle capture un niveau local, mais elle ignore généralement la dynamique fine de la tendance et de la saisonnalité.
+\end{itemize}
+
+L'intérêt d'une baseline se comprend surtout par comparaison. Supposons qu'un modèle ARIMA obtienne un RMSE de 1 000 ventes sur l'ensemble test. Ce chiffre est difficile à interpréter isolément. En revanche, si le modèle naïf obtient un RMSE proche de 1 000, on conclut que le modèle complexe n'améliore quasiment pas la précision malgré sa complexité. À l'inverse, si la baseline obtient un RMSE de 3 000, le même RMSE de 1 000 représente un gain majeur, ce qui justifie pleinement la modélisation avancée.
+
+Les baselines permettent donc :
+\begin{enumerate}
+    \item de quantifier le gain relatif apporté par chaque modèle ;
+    \item de détecter un surapprentissage, par exemple lorsqu'un modèle est excellent en entraînement mais inférieur aux baselines en test ;
+    \item de calibrer l'interprétation des métriques dans l'unité du problème, ici le nombre de ventes mensuelles.
+\end{enumerate}
+
+Un modèle doit donc battre les baselines pour être retenu. Dans le cas contraire, la série ne contient pas de structure suffisamment régulière pour justifier une modélisation avancée, ou bien les transformations préalables sont insuffisantes.
+
 \section{Métriques d'évaluation}
 Les métriques utilisées sont :
 \[
@@ -419,6 +440,47 @@ Avec l'opérateur de retard :
 \Phi(L)Y_t = c + \varepsilon_t, \quad \Phi(L)=1-\phi_1L-\cdots-\phi_pL^p
 \]
 La condition de stationnarité est que les racines de $\Phi(z)=0$ soient à l'extérieur du cercle unité.
+
+
+\subsection{Condition de stationnarité d'un AR(p) : racines du polynôme $\Phi(z)$}
+Un modèle AR($p$) s'écrit :
+\[
+Y_t = c + \phi_1Y_{t-1}+\phi_2Y_{t-2}+\cdots+\phi_pY_{t-p}+\varepsilon_t.
+\]
+En notation opérateur de retard $L$, tel que $L^kY_t=Y_{t-k}$ :
+\[
+\Phi(L)Y_t = c + \varepsilon_t, \qquad \Phi(L)=1-\phi_1L-\phi_2L^2-\cdots-\phi_pL^p.
+\]
+
+Le processus AR($p$) est stationnaire si et seulement si toutes les racines du polynôme caractéristique $\Phi(z)=0$ sont situées \textbf{à l'extérieur du cercle unité} :
+\[
+\forall z_i \text{ tel que } \Phi(z_i)=0, \qquad |z_i|>1.
+\]
+
+Pour comprendre cette condition, considérons le cas AR(1) :
+\[
+Y_t = \phi_1Y_{t-1}+\varepsilon_t, \qquad \Phi(L)=1-\phi_1L.
+\]
+La racine de $\Phi(z)=1-\phi_1z=0$ est $z_1=1/\phi_1$. La condition $|z_1|>1$ est donc équivalente à $|\phi_1|<1$. Par substitution récursive :
+\[
+Y_t = \phi_1Y_{t-1}+\varepsilon_t
+     = \phi_1^2Y_{t-2}+\phi_1\varepsilon_{t-1}+\varepsilon_t
+     = \sum_{k=0}^{\infty}\phi_1^k\varepsilon_{t-k}.
+\]
+Cette somme infinie converge si et seulement si $|\phi_1|<1$, ce qui garantit une variance finie :
+\[
+Var(Y_t)=\frac{\sigma^2_{\varepsilon}}{1-\phi_1^2}<\infty.
+\]
+
+Pour un AR($p$), les racines peuvent être réelles ou complexes. Si l'une d'elles se trouve dans le cercle unité, c'est-à-dire si $|z_i|\leq 1$, le processus n'est pas stationnaire. Le cas limite $z_i=1$ correspond à une racine unitaire : la série contient alors un facteur $(1-L)$ et doit être différenciée. C'est précisément l'idée du test ADF, qui vérifie la présence d'une racine unitaire.
+
+Après estimation, cette condition peut être vérifiée numériquement avec \texttt{statsmodels} :
+\begin{lstlisting}[language=Python]
+model = ARIMA(train, order=(p, d, q)).fit()
+ar_roots = model.arroots
+print(np.abs(ar_roots))
+\end{lstlisting}
+Pour le modèle final \texttt{SARIMA(1,1,0)x(1,1,0,12)}, les modules des racines AR sont supérieurs à 1. Le plus petit module saisonnier est environ \textbf{1.099} et le module non saisonnier est environ \textbf{2.887}. Cela confirme la stationnarité de la partie autorégressive après les différenciations appliquées.
 
 \subsection{Modèle MA(q)}
 Un modèle moyenne mobile d'ordre $q$ est :
@@ -470,6 +532,53 @@ Elles permettent de résoudre un système linéaire pour estimer $\phi_1, \ldots
 
 \subsection{MA(q) et ARMA(p,q) from scratch}
 Pour MA(q), les résidus passés ne sont pas observés directement. L'estimation nécessite donc une procédure itérative : initialiser les résidus, calculer les prédictions, mettre à jour les erreurs, puis optimiser les paramètres. Pour ARMA(p,q), on combine les retards de la série et les retards des résidus. Les paramètres obtenus sont ensuite comparés à ceux de \texttt{statsmodels}.
+
+
+\section{Comparaison des paramètres estimés : implémentation from scratch vs statsmodels}
+Afin de valider les implémentations manuelles codées en NumPy, les paramètres estimés sont comparés à ceux fournis par \texttt{statsmodels} sur la même série d'entraînement. L'objectif n'est pas d'obtenir exactement les mêmes valeurs, mais de vérifier la cohérence des signes, des ordres de grandeur et des performances.
+
+\subsection{Comparaison AR(2)}
+\begin{table}[H]
+\centering
+\begin{tabular}{lrr}
+\toprule
+Paramètre & From scratch OLS NumPy & statsmodels ARIMA \\
+\midrule
+$\phi_1$ & 0.6856 & 0.6834 \\
+$\phi_2$ & -0.2699 & -0.2668 \\
+Constante équivalente & 2 794.24 & 2 732.71 \\
+RMSE train & 2 130.78 & 2 131.57 \\
+\bottomrule
+\end{tabular}
+\caption{Comparaison des paramètres AR(2) estimés manuellement et avec statsmodels.}
+\end{table}
+
+Les coefficients $\phi_1$ et $\phi_2$ sont presque identiques entre les deux approches. La constante reste également du même ordre de grandeur. La proximité du RMSE d'entraînement confirme que l'implémentation manuelle capture correctement la logique autorégressive.
+
+\subsection{Comparaison MA(1)}
+\begin{table}[H]
+\centering
+\begin{tabular}{lrr}
+\toprule
+Paramètre & From scratch itératif & statsmodels ARIMA \\
+\midrule
+$\theta_1$ & 0.7000 & 0.6881 \\
+$\sigma^2$ & 4 529 696.11 & 4 528 391.00 \\
+\bottomrule
+\end{tabular}
+\caption{Comparaison des paramètres MA(1) estimés manuellement et avec statsmodels.}
+\end{table}
+
+Les écarts entre les deux implémentations sont faibles. \texttt{statsmodels} utilise une estimation par maximum de vraisemblance conditionnel ou exact, tandis que l'implémentation from scratch utilise une procédure itérative simplifiée. Malgré ces différences, les paramètres obtenus sont très proches, ce qui valide la logique pédagogique de l'implémentation manuelle.
+
+\subsection{Interprétation des paramètres du modèle final}
+Pour le modèle \texttt{SARIMA(1,1,0)x(1,1,0,12)} retenu, les paramètres estimés sont approximativement :
+\[
+\phi_1=-0.346, \qquad \Phi_1=-0.322.
+\]
+Le coefficient $\phi_1$ négatif indique qu'après différenciation, une augmentation importante d'un mois peut être suivie d'une correction partielle le mois suivant. Cela correspond à un mécanisme de retour vers un niveau plus normal après un choc de vente. Le coefficient saisonnier $\Phi_1$ négatif indique également une correction à l'échelle annuelle : une variation forte par rapport au même mois de l'année précédente tend à être partiellement compensée.
+
+Ces paramètres sont cohérents avec la série de champagne : les ventes sont fortement dominées par des cycles annuels, notamment les pics de fin d'année. Le modèle final capture cette dynamique saisonnière beaucoup mieux que les modèles ARIMA non saisonniers.
 
 \section{ARIMA et SARIMA}
 Un modèle ARIMA est :
